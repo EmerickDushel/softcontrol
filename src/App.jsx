@@ -818,14 +818,18 @@ function UsersPage({ currentUser }) {
 
 // ─── PAGE PRODUITS & DLC ─────────────────────────────────────────────────────
 
+const EMPTY_PRODUCT_FORM = { nom: "", categorie: "", fournisseur: "", numero_lot: "", dlc: "", quantite: "", unite: "kg" };
+
 function ProductsPage({ currentUser }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("Toutes");
   const [filterStatus, setFilterStatus] = useState("Tous");
-  const [form, setForm] = useState({ nom: "", categorie: "", fournisseur: "", numero_lot: "", dlc: "", quantite: "", unite: "kg" });
+  const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
+  const [editForm, setEditForm] = useState(EMPTY_PRODUCT_FORM);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(null);
 
@@ -864,7 +868,35 @@ function ProductsPage({ currentUser }) {
     if (!error && data) {
       setProducts(prev => [...prev, data].sort((a, b) => a.dlc.localeCompare(b.dlc)));
       setShowAdd(false);
-      setForm({ nom: "", categorie: "", fournisseur: "", numero_lot: "", dlc: "", quantite: "", unite: "kg" });
+      setForm(EMPTY_PRODUCT_FORM);
+    }
+    setSaving(false);
+  };
+
+  const openEdit = (product) => {
+    setEditing(product);
+    setEditForm({
+      nom: product.nom || "",
+      categorie: product.categorie || "",
+      fournisseur: product.fournisseur || "",
+      numero_lot: product.numero_lot || "",
+      dlc: product.dlc || "",
+      quantite: product.quantite || "",
+      unite: product.unite || "kg",
+    });
+    setShowAdd(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editForm.nom || !editForm.dlc) return;
+    setSaving(true);
+    const { data, error } = await supabase.from("produits")
+      .update({ ...editForm, alerte_j3_envoyee: false, updated_by: (await supabase.auth.getUser()).data.user?.id })
+      .eq("id", editing.id)
+      .select().single();
+    if (!error && data) {
+      setProducts(prev => prev.map(p => p.id === data.id ? data : p).sort((a, b) => a.dlc.localeCompare(b.dlc)));
+      setEditing(null);
     }
     setSaving(false);
   };
@@ -873,6 +905,7 @@ function ProductsPage({ currentUser }) {
     setDeleting(id);
     await supabase.from("produits").delete().eq("id", id);
     setProducts(prev => prev.filter(p => p.id !== id));
+    if (editing?.id === id) setEditing(null);
     setDeleting(null);
   };
 
@@ -929,47 +962,50 @@ function ProductsPage({ currentUser }) {
         <div style={{ background: COLORS.white, borderRadius: 14, border: `1px solid ${COLORS.gray200}`, padding: 20 }}>
           <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600, color: COLORS.gray900 }}>Nouveau produit</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>Nom du produit *</label>
-              <input style={inputStyle} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} placeholder="Ex : Poulet rôti" />
-            </div>
-            <div>
-              <label style={labelStyle}>Catégorie</label>
-              <select style={inputStyle} value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}>
-                <option value="">Sélectionner...</option>
-                {CATEGORIES_PRODUITS.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>DLC *</label>
-              <input style={inputStyle} type="date" value={form.dlc} onChange={e => setForm({ ...form, dlc: e.target.value })} />
-            </div>
-            <div>
-              <label style={labelStyle}>Fournisseur</label>
-              <input style={inputStyle} value={form.fournisseur} onChange={e => setForm({ ...form, fournisseur: e.target.value })} placeholder="Ex : Metro" />
-            </div>
-            <div>
-              <label style={labelStyle}>N° de lot</label>
-              <input style={inputStyle} value={form.numero_lot} onChange={e => setForm({ ...form, numero_lot: e.target.value })} placeholder="Ex : LOT-2024-001" />
-            </div>
+            <div><label style={labelStyle}>Nom du produit *</label><input style={inputStyle} value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} placeholder="Ex : Poulet rôti" /></div>
+            <div><label style={labelStyle}>Catégorie</label><select style={inputStyle} value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}><option value="">Sélectionner...</option>{CATEGORIES_PRODUITS.map(c => <option key={c}>{c}</option>)}</select></div>
+            <div><label style={labelStyle}>DLC *</label><input style={inputStyle} type="date" value={form.dlc} onChange={e => setForm({ ...form, dlc: e.target.value })} /></div>
+            <div><label style={labelStyle}>Fournisseur</label><input style={inputStyle} value={form.fournisseur} onChange={e => setForm({ ...form, fournisseur: e.target.value })} placeholder="Ex : Metro" /></div>
+            <div><label style={labelStyle}>N° de lot</label><input style={inputStyle} value={form.numero_lot} onChange={e => setForm({ ...form, numero_lot: e.target.value })} placeholder="Ex : LOT-2024-001" /></div>
             <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>Quantité</label>
-                <input style={inputStyle} value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} placeholder="Ex : 2.5" />
-              </div>
-              <div style={{ width: 110 }}>
-                <label style={labelStyle}>Unité</label>
-                <select style={inputStyle} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })}>
-                  {UNITES.map(u => <option key={u}>{u}</option>)}
-                </select>
-              </div>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Quantité</label><input style={inputStyle} value={form.quantite} onChange={e => setForm({ ...form, quantite: e.target.value })} placeholder="Ex : 2.5" /></div>
+              <div style={{ width: 110 }}><label style={labelStyle}>Unité</label><select style={inputStyle} value={form.unite} onChange={e => setForm({ ...form, unite: e.target.value })}>{UNITES.map(u => <option key={u}>{u}</option>)}</select></div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-            <button onClick={() => { setShowAdd(false); setForm({ nom: "", categorie: "", fournisseur: "", numero_lot: "", dlc: "", quantite: "", unite: "kg" }); }} style={secondaryBtnStyle}>Annuler</button>
+            <button onClick={() => { setShowAdd(false); setForm(EMPTY_PRODUCT_FORM); }} style={secondaryBtnStyle}>Annuler</button>
             <button onClick={handleAdd} disabled={saving || !form.nom || !form.dlc} style={{ ...primaryBtnStyle, opacity: (saving || !form.nom || !form.dlc) ? 0.6 : 1 }}>
               {saving ? <Spinner size={14} color="#fff" /> : <i className="ti ti-device-floppy" style={{ fontSize: 14 }} />}
               Enregistrer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div style={{ background: COLORS.white, borderRadius: 14, border: `2px solid ${COLORS.primaryLight}`, padding: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: COLORS.primaryLight + "20", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <i className="ti ti-pencil" style={{ fontSize: 15, color: COLORS.primaryLight }} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: COLORS.gray900 }}>Modifier — {editing.nom}</h3>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            <div><label style={labelStyle}>Nom du produit *</label><input style={inputStyle} value={editForm.nom} onChange={e => setEditForm({ ...editForm, nom: e.target.value })} /></div>
+            <div><label style={labelStyle}>Catégorie</label><select style={inputStyle} value={editForm.categorie} onChange={e => setEditForm({ ...editForm, categorie: e.target.value })}><option value="">Sélectionner...</option>{CATEGORIES_PRODUITS.map(c => <option key={c}>{c}</option>)}</select></div>
+            <div><label style={labelStyle}>DLC *</label><input style={inputStyle} type="date" value={editForm.dlc} onChange={e => setEditForm({ ...editForm, dlc: e.target.value })} /></div>
+            <div><label style={labelStyle}>Fournisseur</label><input style={inputStyle} value={editForm.fournisseur} onChange={e => setEditForm({ ...editForm, fournisseur: e.target.value })} /></div>
+            <div><label style={labelStyle}>N° de lot</label><input style={inputStyle} value={editForm.numero_lot} onChange={e => setEditForm({ ...editForm, numero_lot: e.target.value })} /></div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1 }}><label style={labelStyle}>Quantité</label><input style={inputStyle} value={editForm.quantite} onChange={e => setEditForm({ ...editForm, quantite: e.target.value })} /></div>
+              <div style={{ width: 110 }}><label style={labelStyle}>Unité</label><select style={inputStyle} value={editForm.unite} onChange={e => setEditForm({ ...editForm, unite: e.target.value })}>{UNITES.map(u => <option key={u}>{u}</option>)}</select></div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+            <button onClick={() => setEditing(null)} style={secondaryBtnStyle}>Annuler</button>
+            <button onClick={handleUpdate} disabled={saving || !editForm.nom || !editForm.dlc} style={{ ...primaryBtnStyle, opacity: (saving || !editForm.nom || !editForm.dlc) ? 0.6 : 1 }}>
+              {saving ? <Spinner size={14} color="#fff" /> : <i className="ti ti-pencil-check" style={{ fontSize: 14 }} />}
+              Mettre à jour
             </button>
           </div>
         </div>
@@ -1009,13 +1045,19 @@ function ProductsPage({ currentUser }) {
                     {p.quantite ? `${p.quantite} ${p.unite}` : "—"}
                   </td>
                   <td style={{ padding: "12px 14px" }}>
-                    {(currentUser.role === "Administrateur" || currentUser.role === "Superviseur") && (
-                      <button onClick={() => handleDelete(p.id)} disabled={deleting === p.id}
-                        style={{ background: COLORS.dangerLight, border: `1px solid ${COLORS.danger}30`, color: COLORS.danger, borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, opacity: deleting === p.id ? 0.6 : 1 }}>
-                        {deleting === p.id ? <Spinner size={12} color={COLORS.danger} /> : <i className="ti ti-trash" style={{ fontSize: 13 }} />}
-                        Supprimer
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => openEdit(p)}
+                        style={{ background: COLORS.primary + "15", border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <i className="ti ti-pencil" style={{ fontSize: 13 }} /> Modifier
                       </button>
-                    )}
+                      {(currentUser.role === "Administrateur" || currentUser.role === "Superviseur") && (
+                        <button onClick={() => handleDelete(p.id)} disabled={deleting === p.id}
+                          style={{ background: COLORS.dangerLight, border: `1px solid ${COLORS.danger}30`, color: COLORS.danger, borderRadius: 6, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, opacity: deleting === p.id ? 0.6 : 1 }}>
+                          {deleting === p.id ? <Spinner size={12} color={COLORS.danger} /> : <i className="ti ti-trash" style={{ fontSize: 13 }} />}
+                          Supprimer
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
